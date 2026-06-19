@@ -1,0 +1,6 @@
+{
+  "name": "Above-Ground Pool Manager",
+  "description": "Manage above-ground pool chemical levels, pump runtimes, maintenance schedules, and simulate Alexa controls with in-app push notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
