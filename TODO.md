@@ -22,10 +22,12 @@
 - [x] **#3 — Replace DOM-string Alexa trigger.** `AlexaConnectionManager` now
       calls a callback registered by `AlexaSandbox` via a ref in `App.tsx`.
       No more `getElementById` / synthetic DOM events.
-- [ ] **#6 — Home Assistant integration layer.** Rewire device handlers to call
-      HA's REST API so buttons control real plugs. HA URL + token in `settings`.
-- [ ] **#7 — Poll real temp from HA (Inkbird via Tuya→HA) → write to Postgres.**
-      Replace the mock thermometer; build temp history.
+- [x] **#6 — Home Assistant integration layer.** Device on/off toggles now call
+      HA's REST API (`ha.ts`) when an entity ID is configured. HA token + entity
+      IDs entered via the Settings panel (stored in DB).
+- [x] **#7 — Poll real temp from HA (Inkbird via Tuya→HA) → write to Postgres.**
+      Background poller (`ha-poller.ts`) reads the configured temp sensor from
+      HA every 5 minutes and updates the thermometer device_status row.
 
 ## Deferred
 

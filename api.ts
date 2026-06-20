@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool, getSetting, setSetting } from './db';
+import { setEntityState, getEntityState } from './ha';
 
 export const api = Router();
 
@@ -228,12 +229,20 @@ api.post('/alexa-history', async (req, res) => {
   }
 });
 
-// --- Settings (Gemini key etc.) ---
-// GET returns only whether a value is set, never the secret itself.
+// --- Settings ---
+// Secret keys (API keys, tokens) return only isSet — never the value itself.
+// Non-secret keys (entity IDs, URLs) return the value so the frontend can use them.
+const SECRET_KEYS = new Set(['gemini_api_key', 'ha_token']);
+
 api.get('/settings/:key', async (req, res) => {
   try {
     const val = await getSetting(req.params.key);
-    res.json({ key: req.params.key, isSet: !!val });
+    const isSecret = SECRET_KEYS.has(req.params.key);
+    res.json({
+      key: req.params.key,
+      isSet: !!val,
+      value: isSecret ? undefined : (val ?? null),
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -245,5 +254,36 @@ api.put('/settings/:key', async (req, res) => {
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Home Assistant passthrough ---
+
+// POST /api/ha/device/:entity  body: { on: boolean }
+// Tells HA to turn a switch on or off, then syncs state to our DB.
+api.post('/ha/device/:entity', async (req, res) => {
+  const entityId = req.params.entity;
+  const { on } = req.body;
+  if (typeof on !== 'boolean') {
+    return res.status(400).json({ error: '"on" (boolean) is required' });
+  }
+  try {
+    await setEntityState(entityId, on);
+    res.json({ ok: true, entity_id: entityId, on });
+  } catch (err: any) {
+    console.warn(`HA device control failed for ${entityId}:`, err.message);
+    // Return the error but don't 500 — the frontend state update already
+    // happened optimistically and we don't want to confuse the UI.
+    res.status(503).json({ error: err.message, haUnreachable: true });
+  }
+});
+
+// GET /api/ha/state/:entity — read any HA entity state
+api.get('/ha/state/:entity', async (req, res) => {
+  try {
+    const state = await getEntityState(req.params.entity);
+    res.json(state);
+  } catch (err: any) {
+    res.status(503).json({ error: err.message });
   }
 });
