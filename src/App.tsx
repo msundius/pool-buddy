@@ -282,6 +282,25 @@ export default function App() {
     }
   }
 
+  // Surface a failed Home Assistant control call as a visible notification
+  // instead of swallowing it, so the user knows the physical device didn't switch.
+  async function notifyHaError(label: string, entity: string, err: any) {
+    const reason = err?.message ?? String(err);
+    console.warn(`HA control failed for ${entity}:`, reason);
+    try {
+      const saved = await apiClient.addNotification({
+        title: `${label}: Home Assistant control failed`,
+        message: `Couldn't switch ${entity}. ${reason}. Check the Home Assistant URL, token, and entity ID in Settings.`,
+        type: 'danger',
+        read: false,
+        category: 'pump',
+      });
+      setNotifications((prev) => [saved, ...prev]);
+    } catch {
+      // Persisting the notification also failed — the console warning above stands.
+    }
+  }
+
   const handleUpdatePump = async (updates: Partial<PumpStatus>) => {
     const nextPump = { ...pump, ...updates };
     setPump(nextPump);
@@ -292,7 +311,11 @@ export default function App() {
     }
     if ('isCurrentlyOn' in updates) {
       const entity = await haEntity('ha_entity_pump');
-      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
+      if (entity) {
+        apiClient
+          .haSetDevice(entity, updates.isCurrentlyOn!)
+          .catch((e) => notifyHaError('Pump', entity, e));
+      }
     }
   };
 
@@ -306,7 +329,11 @@ export default function App() {
     }
     if ('isCurrentlyOn' in updates) {
       const entity = await haEntity('ha_entity_chlorinator');
-      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
+      if (entity) {
+        apiClient
+          .haSetDevice(entity, updates.isCurrentlyOn!)
+          .catch((e) => notifyHaError('Chlorinator', entity, e));
+      }
     }
   };
 
@@ -320,7 +347,11 @@ export default function App() {
     }
     if ('isCurrentlyOn' in updates) {
       const entity = await haEntity('ha_entity_heater');
-      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
+      if (entity) {
+        apiClient
+          .haSetDevice(entity, updates.isCurrentlyOn!)
+          .catch((e) => notifyHaError('Heater', entity, e));
+      }
     }
   };
 

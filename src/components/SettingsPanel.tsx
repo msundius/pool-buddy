@@ -15,8 +15,11 @@ export function SettingsPanel() {
   const [geminiInput, setGeminiInput] = useState('');
 
   // Home Assistant
+  const [haUrl, setHaUrl] = useState('');
   const [haToken, setHaToken] = useState('');
   const [haTokenIsSet, setHaTokenIsSet] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [haEntityPump, setHaEntityPump] = useState('');
   const [haEntityChlor, setHaEntityChlor] = useState('');
   const [haEntityHeater, setHaEntityHeater] = useState('');
@@ -30,13 +33,15 @@ export function SettingsPanel() {
     Promise.all([
       apiClient.getSettingStatus('gemini_api_key'),
       apiClient.getSettingStatus('ha_token'),
+      apiClient.getSettingStatus('ha_url'),
       apiClient.getSettingStatus('ha_entity_pump'),
       apiClient.getSettingStatus('ha_entity_chlorinator'),
       apiClient.getSettingStatus('ha_entity_heater'),
       apiClient.getSettingStatus('ha_temp_entity'),
-    ]).then(([gem, tok, pump, chlor, heat, temp]) => {
+    ]).then(([gem, tok, url, pump, chlor, heat, temp]) => {
       setGeminiIsSet(!!gem?.isSet);
       setHaTokenIsSet(!!tok?.isSet);
+      if (url?.value) setHaUrl(url.value);
       if (pump?.value) setHaEntityPump(pump.value);
       if (chlor?.value) setHaEntityChlor(chlor.value);
       if (heat?.value) setHaEntityHeater(heat.value);
@@ -55,6 +60,24 @@ export function SettingsPanel() {
       console.warn(`Could not save ${key}.`, e);
     } finally {
       setSaving(null);
+    }
+  }
+
+  // Tests the *saved* HA URL + token (the backend reads them from the DB),
+  // so save those fields before testing.
+  async function testConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await apiClient.haPing();
+      setTestResult({
+        ok: true,
+        msg: `Connected to ${r.url} — Home Assistant is reachable and the token works.`,
+      });
+    } catch (e: any) {
+      setTestResult({ ok: false, msg: e?.message ?? 'Connection failed.' });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -150,17 +173,42 @@ export function SettingsPanel() {
                 <Home className="h-4 w-4 text-sky-500" /> Home Assistant
               </h3>
               <p className="text-xs text-slate-500">
-                HA is at <code className="bg-slate-100 px-1 rounded">http://isabella:8123</code>. Create a Long-Lived Access Token in HA under your Profile → scroll to bottom.
+                Point this at your Home Assistant and create a Long-Lived Access
+                Token in HA under your Profile → scroll to bottom. If the backend
+                runs in Docker, use HA's IP (e.g.{' '}
+                <code className="bg-slate-100 px-1 rounded">http://192.168.1.50:8123</code>),
+                not a hostname the container can't resolve.
               </p>
               <div className={`text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${haTokenIsSet ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                 {haTokenIsSet ? <><CheckCircle2 className="h-3.5 w-3.5" /> Token saved — HA integration active</> : '⚠ No token yet — device control is simulated only'}
               </div>
+              <Field
+                label="Base URL" settingKey="ha_url"
+                value={haUrl} onChange={setHaUrl}
+                placeholder="http://192.168.1.50:8123"
+                onSave={() => save('ha_url', haUrl)}
+              />
               <Field
                 label="Long-Lived Access Token" settingKey="ha_token" type="password"
                 value={haToken} onChange={setHaToken}
                 placeholder={haTokenIsSet ? 'Enter new token to replace…' : 'eyJ0eXAi…'}
                 onSave={() => save('ha_token', haToken, () => { setHaTokenIsSet(true); setHaToken(''); })}
               />
+
+              <button
+                onClick={testConnection}
+                disabled={testing}
+                className="w-full border border-sky-300 text-sky-700 hover:bg-sky-50 disabled:opacity-50 font-medium rounded-lg px-3 py-2 text-sm transition-colors"
+              >
+                {testing ? 'Testing…' : 'Test connection'}
+              </button>
+              {testResult && (
+                <div className={`text-xs rounded-lg px-3 py-2 flex items-start gap-2 ${testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {testResult.ok && <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />}
+                  <span>{testResult.msg}</span>
+                </div>
+              )}
+              <p className="text-xs text-slate-400">Save the URL and token first, then test.</p>
 
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider pt-2 flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5" /> Device Entity IDs

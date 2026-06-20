@@ -44,6 +44,10 @@ Compose, so each value is set in exactly one place.
   **Settings** panel (gear icon, top-right) and paste a key from
   [Google AI Studio](https://aistudio.google.com/app/apikey). It's saved in the
   database. Without a key, commands fall back to a built-in regex parser.
+- **Home Assistant** — configure the base URL, a Long-Lived Access Token, and
+  the equipment entity IDs (pump / chlorinator / heater) in the **Settings**
+  panel, then use **Test connection** to verify reachability. When the backend
+  runs in Docker, use HA's IP rather than a hostname the container can't resolve.
 
 See [TODO.md](TODO.md) for the planned roadmap (Home Assistant integration,
 Inkbird temperature, Alexa via Nabu Casa, etc.).
