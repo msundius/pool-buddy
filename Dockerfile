@@ -21,5 +21,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 
-EXPOSE 3000
+# Documentation only; the actual port comes from the PORT env var at runtime.
+ARG PORT=3030
+EXPOSE ${PORT}
 CMD ["node", "dist/server.cjs"]

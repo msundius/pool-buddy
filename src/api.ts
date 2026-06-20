@@ -8,7 +8,16 @@ async function req(path: string, options?: RequestInit) {
     ...options,
   });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status}`);
+    // Surface the backend's error message (e.g. the underlying HA failure)
+    // instead of just the status code, so callers can show a useful reason.
+    let detail = '';
+    try {
+      const body = await res.clone().json();
+      if (body?.error) detail = `: ${body.error}`;
+    } catch {
+      // non-JSON body — fall back to the status code alone
+    }
+    throw new Error(`Request to ${path} failed (${res.status})${detail}`);
   }
   // Some endpoints (DELETE) may return an empty body.
   const text = await res.text();
@@ -38,4 +47,7 @@ export const apiClient = {
     }),
   haGetState: (entityId: string) =>
     req(`/ha/state/${encodeURIComponent(entityId)}`),
+  // Verify the saved Home Assistant URL + token are reachable and valid.
+  haPing: (): Promise<{ ok: boolean; status?: number; url: string; error?: string }> =>
+    req('/ha/ping'),
 };

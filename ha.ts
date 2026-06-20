@@ -18,7 +18,9 @@ async function getConfig() {
     getSetting('ha_url'),
     getSetting('ha_token'),
   ]);
-  return { url: url || 'http://isabella:8123', token };
+  // Strip any trailing slash so `${url}/api/...` never produces `//api`.
+  const base = (url || 'http://isabella:8123').replace(/\/+$/, '');
+  return { url: base, token };
 }
 
 function headers(token: string) {
@@ -57,6 +59,39 @@ export async function setEntityState(
     body: JSON.stringify({ entity_id: entityId }),
   });
   if (!res.ok) throw new Error(`HA service call failed: ${res.status}`);
+}
+
+// Connectivity check used by the Settings "Test connection" button.
+// Hits HA's API root, which returns {"message":"API running."} on success —
+// verifying both that the URL is reachable and that the token is valid.
+export async function ping(): Promise<{
+  ok: boolean;
+  status?: number;
+  url: string;
+  error?: string;
+}> {
+  const { url, token } = await getConfig();
+  if (!token) {
+    return { ok: false, url, error: 'No Home Assistant token configured.' };
+  }
+  try {
+    const res = await fetch(`${url}/api/`, { headers: headers(token) });
+    if (!res.ok) {
+      const hint =
+        res.status === 401
+          ? 'token rejected — recreate the Long-Lived Access Token'
+          : `HA returned HTTP ${res.status}`;
+      return { ok: false, status: res.status, url, error: hint };
+    }
+    return { ok: true, status: res.status, url };
+  } catch (err: any) {
+    // Network-level failure (DNS, refused, timeout) — never reached HA.
+    return {
+      ok: false,
+      url,
+      error: `${err?.message ?? 'fetch failed'} — check the URL and that the backend can reach this host`,
+    };
+  }
 }
 
 // Read the current temperature from the Inkbird sensor entity.

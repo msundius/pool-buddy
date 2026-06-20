@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool, getSetting, setSetting } from './db';
-import { setEntityState, getEntityState } from './ha';
+import { setEntityState, getEntityState, ping } from './ha';
 
 export const api = Router();
 
@@ -276,6 +276,12 @@ api.post('/ha/device/:entity', async (req, res) => {
     // happened optimistically and we don't want to confuse the UI.
     res.status(503).json({ error: err.message, haUnreachable: true });
   }
+});
+
+// GET /api/ha/ping — verify the configured HA URL + token are reachable/valid.
+api.get('/ha/ping', async (_req, res) => {
+  const result = await ping();
+  res.status(result.ok ? 200 : 503).json(result);
 });
 
 // GET /api/ha/state/:entity — read any HA entity state
