@@ -174,10 +174,11 @@ export function SettingsPanel() {
               </h3>
               <p className="text-xs text-slate-500">
                 Point this at your Home Assistant and create a Long-Lived Access
-                Token in HA under your Profile → scroll to bottom. If the backend
-                runs in Docker, use HA's IP (e.g.{' '}
-                <code className="bg-slate-100 px-1 rounded">http://192.168.1.50:8123</code>),
-                not a hostname the container can't resolve.
+                Token in HA under your Profile → scroll to bottom. When HA runs on
+                the same host as this app, use{' '}
+                <code className="bg-slate-100 px-1 rounded">http://host.docker.internal:8123</code>{' '}
+                (the default). Otherwise use HA's IP or a hostname the container
+                can resolve.
               </p>
               <div className={`text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${haTokenIsSet ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                 {haTokenIsSet ? <><CheckCircle2 className="h-3.5 w-3.5" /> Token saved — HA integration active</> : '⚠ No token yet — device control is simulated only'}
@@ -185,7 +186,7 @@ export function SettingsPanel() {
               <Field
                 label="Base URL" settingKey="ha_url"
                 value={haUrl} onChange={setHaUrl}
-                placeholder="http://192.168.1.50:8123"
+                placeholder="http://host.docker.internal:8123"
                 onSave={() => save('ha_url', haUrl)}
               />
               <Field

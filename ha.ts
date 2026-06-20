@@ -18,8 +18,10 @@ async function getConfig() {
     getSetting('ha_url'),
     getSetting('ha_token'),
   ]);
-  // Strip any trailing slash so `${url}/api/...` never produces `//api`.
-  const base = (url || 'http://isabella:8123').replace(/\/+$/, '');
+  // Default targets the Docker host (where Home Assistant typically runs) via
+  // the host-gateway alias wired up in docker-compose.yml. Strip any trailing
+  // slash so `${url}/api/...` never produces `//api`.
+  const base = (url || 'http://host.docker.internal:8123').replace(/\/+$/, '');
   return { url: base, token };
 }
 
