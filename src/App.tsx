@@ -1,17 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
-import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  addDoc,
-  getDocs,
-  orderBy,
-  query,
-  limit,
-  onSnapshot,
-} from 'firebase/firestore';
+import { apiClient } from './api';
 
 import {
   PoolVolumeConfig,
@@ -35,8 +23,9 @@ import { AlexaSandbox } from './components/AlexaSandbox';
 import { NotificationCenter } from './components/NotificationCenter';
 import { HeaterThermometerControls } from './components/HeaterThermometerControls';
 import { AlexaConnectionManager } from './components/AlexaConnectionManager';
+import { SettingsPanel } from './components/SettingsPanel';
 
-import { Waves, Bell, Smartphone, HelpCircle, RefreshCw, Layers, CheckCircle } from 'lucide-react';
+import { Waves } from 'lucide-react';
 
 // Default initial mock parameters for smooth start
 const DEFAULT_VOLUME: PoolVolumeConfig = {
@@ -154,149 +143,29 @@ export default function App() {
   const [alexaLogs, setAlexaLogs] = useState<AlexaLog[]>([]);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
 
-  // 1. Double-Tiered Storage Sync: Sync with Firebase, fallback to LocalStorage
+  // 1. Load all state from the backend (which owns the Postgres connection).
   useEffect(() => {
-    // Attempt to load from Firestore
-    async function loadFirebaseData() {
+    async function loadState() {
       try {
-        // --- Volume Config ---
-        const volRef = doc(db, 'pool_config', 'main_pool');
-        const volSnap = await getDoc(volRef);
-        if (volSnap.exists()) {
-          setVolumeConfig(volSnap.data() as PoolVolumeConfig);
-        } else {
-          await setDoc(volRef, DEFAULT_VOLUME);
-        }
-
-        // --- Chemistry Hits ---
-        const chemQuery = query(collection(db, 'chemistry_logs'), orderBy('timestamp', 'desc'), limit(10));
-        const chemSnap = await getDocs(chemQuery);
-        if (!chemSnap.empty) {
-          const loadedChem: ChemicalReading[] = [];
-          chemSnap.forEach((doc) => {
-            loadedChem.push(doc.data() as ChemicalReading);
-          });
-          setChemistryHistory(loadedChem);
-        } else {
-          // pre-seed
-          const batchAdd = DEFAULT_CHEMISTRY_HISTORY.map((h) =>
-            addDoc(collection(db, 'chemistry_logs'), h)
-          );
-          await Promise.all(batchAdd);
-        }
-
-        // --- Pump Sync ---
-        const pumpRef = doc(db, 'device_status', 'pump');
-        const pumpSnap = await getDoc(pumpRef);
-        if (pumpSnap.exists()) {
-          setPump(pumpSnap.data() as PumpStatus);
-        } else {
-          await setDoc(pumpRef, DEFAULT_PUMP);
-        }
-
-        // --- Chlorinator Sync ---
-        const clRef = doc(db, 'device_status', 'chlorinator');
-        const clSnap = await getDoc(clRef);
-        if (clSnap.exists()) {
-          setChlorinator(clSnap.data() as ChlorinatorStatus);
-        } else {
-          await setDoc(clRef, DEFAULT_CHLORINATOR);
-        }
-
-        // --- Heater Sync ---
-        const heaterRef = doc(db, 'device_status', 'heater');
-        const heaterSnap = await getDoc(heaterRef);
-        if (heaterSnap.exists()) {
-          setHeater(heaterSnap.data() as HeaterStatus);
-        } else {
-          await setDoc(heaterRef, DEFAULT_HEATER);
-        }
-
-        // --- Thermometer Sync ---
-        const thermometerRef = doc(db, 'device_status', 'thermometer');
-        const thermometerSnap = await getDoc(thermometerRef);
-        if (thermometerSnap.exists()) {
-          setThermometer(thermometerSnap.data() as ThermometerStatus);
-        } else {
-          await setDoc(thermometerRef, DEFAULT_THERMOMETER);
-        }
-
-        // --- Alexa Connection Sync ---
-        const alexaConnectionRef = doc(db, 'device_status', 'alexa_connection');
-        const alexaConnectionSnap = await getDoc(alexaConnectionRef);
-        if (alexaConnectionSnap.exists()) {
-          setAlexaConnection(alexaConnectionSnap.data() as AlexaConnection);
-        } else {
-          await setDoc(alexaConnectionRef, DEFAULT_ALEXA_CONNECTION);
-        }
-
-        // --- Maintenance Tasks ---
-        const mCollection = collection(db, 'maintenance__schedules');
-        const mSnap = await getDocs(mCollection);
-        if (!mSnap.empty) {
-          const loadedTasks: MaintenanceTask[] = [];
-          mSnap.forEach((doc) => {
-            loadedTasks.push({ id: doc.id, ...doc.data() } as MaintenanceTask);
-          });
-          setTasks(loadedTasks);
-        } else {
-          // Pre-seed
-          const seedPromises = DEFAULT_TAKS.map((t) => {
-            const { id, ...data } = t;
-            return setDoc(doc(db, 'maintenance__schedules', id), data);
-          });
-          await Promise.all(seedPromises);
-        }
-
-        // --- Alexa Logs ---
-        const alexaQuery = query(collection(db, 'alexa_history'), orderBy('timestamp', 'desc'), limit(15));
-        const alexaSnap = await getDocs(alexaQuery);
-        const loadedAlexa: AlexaLog[] = [];
-        alexaSnap.forEach((doc) => {
-          loadedAlexa.push(doc.data() as AlexaLog);
-        });
-        setAlexaLogs(loadedAlexa);
-
-        // --- System Notifications ---
-        const notifQuery = query(collection(db, 'notifications'), orderBy('timestamp', 'desc'), limit(15));
-        const notifSnap = await getDocs(notifQuery);
-        const loadedNotifs: InAppNotification[] = [];
-        notifSnap.forEach((doc) => {
-          loadedNotifs.push({ id: doc.id, ...doc.data() } as InAppNotification);
-        });
-        setNotifications(loadedNotifs);
-
-        setDbStateLoaded(true);
+        const state = await apiClient.getState();
+        if (state.config) setVolumeConfig(state.config);
+        if (state.chemistry?.length) setChemistryHistory(state.chemistry);
+        if (state.pump) setPump(state.pump);
+        if (state.chlorinator) setChlorinator(state.chlorinator);
+        if (state.heater) setHeater(state.heater);
+        if (state.thermometer) setThermometer(state.thermometer);
+        if (state.alexaConnection) setAlexaConnection(state.alexaConnection);
+        if (state.tasks?.length) setTasks(state.tasks);
+        if (state.alexaLogs) setAlexaLogs(state.alexaLogs);
+        if (state.notifications) setNotifications(state.notifications);
       } catch (err) {
-        console.warn('Firebase connection delayed, using responsive client caching.', err);
-        // Load fallback localStorage
-        const cachedVol = localStorage.getItem('pool_vol');
-        const cachedChem = localStorage.getItem('pool_chem');
-        const cachedPump = localStorage.getItem('pool_pump');
-        const cachedCl = localStorage.getItem('pool_cl');
-        const cachedHeater = localStorage.getItem('pool_heater');
-        const cachedTherm = localStorage.getItem('pool_thermometer');
-        const cachedAlexaConn = localStorage.getItem('pool_alexa_conn');
-        const cachedTasks = localStorage.getItem('pool_tasks');
-        const cachedAlexa = localStorage.getItem('pool_alexa');
-        const cachedNotifs = localStorage.getItem('pool_notifs');
-
-        if (cachedVol) setVolumeConfig(JSON.parse(cachedVol));
-        if (cachedChem) setChemistryHistory(JSON.parse(cachedChem));
-        if (cachedPump) setPump(JSON.parse(cachedPump));
-        if (cachedCl) setChlorinator(JSON.parse(cachedCl));
-        if (cachedHeater) setHeater(JSON.parse(cachedHeater));
-        if (cachedTherm) setThermometer(JSON.parse(cachedTherm));
-        if (cachedAlexaConn) setAlexaConnection(JSON.parse(cachedAlexaConn));
-        if (cachedTasks) setTasks(JSON.parse(cachedTasks));
-        if (cachedAlexa) setAlexaLogs(JSON.parse(cachedAlexa));
-        if (cachedNotifs) setNotifications(JSON.parse(cachedNotifs));
-
+        console.warn('Could not reach Pool Buddy backend; showing default state.', err);
+      } finally {
         setDbStateLoaded(true);
       }
     }
 
-    loadFirebaseData();
+    loadState();
   }, []);
 
   // 2. Automated Diagnostic Notifications Generator
@@ -351,109 +220,90 @@ export default function App() {
       });
     }
 
-    // Filter list to keep only unique alerts (avoid creating duplicates of the same type)
+    // Persist any new alerts that aren't already present unread, using the
+    // backend-assigned id so read-state updates target the correct row.
     if (generated.length > 0) {
-      // Avoid writing if same alert exists unread
-      setNotifications((prev) => {
-        const unique = [...prev];
-        generated.forEach((gen) => {
-          const exists = unique.some((ex) => ex.title === gen.title && !ex.read);
-          if (!exists) {
-            const fresh: InAppNotification = {
-              id: Math.random().toString(),
-              ...gen,
-            };
-            unique.unshift(fresh);
-            // Save to Firestore background if possible
-            addDoc(collection(db, 'notifications'), fresh).catch(() => {});
+      (async () => {
+        for (const gen of generated) {
+          const exists = notifications.some((ex) => ex.title === gen.title && !ex.read);
+          if (exists) continue;
+          try {
+            const saved = await apiClient.addNotification(gen);
+            setNotifications((prev) => [saved, ...prev]);
+          } catch (e) {
+            console.warn('Could not save notification.', e);
           }
-        });
-        localStorage.setItem('pool_notifs', JSON.stringify(unique));
-        return unique;
-      });
+        }
+      })();
     }
   }, [chemistryHistory]);
 
-  // MUTATIONS helpers
+  // MUTATIONS helpers — optimistic local update, then persist via the backend API.
   const handleUpdateVolume = async (newVol: PoolVolumeConfig) => {
     setVolumeConfig(newVol);
-    localStorage.setItem('pool_vol', JSON.stringify(newVol));
     try {
-      await setDoc(doc(db, 'pool_config', 'main_pool'), newVol);
+      await apiClient.updateConfig(newVol);
     } catch (e) {
-      console.warn('Network queued setting write.');
+      console.warn('Could not save pool config.', e);
     }
   };
 
   const handleAddReading = async (newReadingObj: Omit<ChemicalReading, 'id' | 'timestamp'>) => {
-    const fullReading: ChemicalReading = {
-      ...newReadingObj,
-      timestamp: new Date().toISOString(),
-    };
-
-    const nextHistory = [fullReading, ...chemistryHistory];
-    setChemistryHistory(nextHistory);
-    localStorage.setItem('pool_chem', JSON.stringify(nextHistory));
-
     try {
-      await addDoc(collection(db, 'chemistry_logs'), fullReading);
+      const saved = await apiClient.addChemistry(newReadingObj);
+      setChemistryHistory((prev) => [saved, ...prev]);
     } catch (e) {
-      console.warn('Network queued chemically log.');
+      console.warn('Could not save chemistry reading.', e);
     }
   };
 
   const handleUpdatePump = async (updates: Partial<PumpStatus>) => {
     const nextPump = { ...pump, ...updates };
     setPump(nextPump);
-    localStorage.setItem('pool_pump', JSON.stringify(nextPump));
     try {
-      await setDoc(doc(db, 'device_status', 'pump'), nextPump);
+      await apiClient.updateDevice('pump', nextPump);
     } catch (e) {
-      console.warn('Network queued pump change.');
+      console.warn('Could not save pump change.', e);
     }
   };
 
   const handleUpdateChlorinator = async (updates: Partial<ChlorinatorStatus>) => {
     const nextCl = { ...chlorinator, ...updates };
     setChlorinator(nextCl);
-    localStorage.setItem('pool_cl', JSON.stringify(nextCl));
     try {
-      await setDoc(doc(db, 'device_status', 'chlorinator'), nextCl);
+      await apiClient.updateDevice('chlorinator', nextCl);
     } catch (e) {
-      console.warn('Network queued chlorinator update.');
+      console.warn('Could not save chlorinator update.', e);
     }
   };
 
   const handleUpdateHeater = async (updates: Partial<HeaterStatus>) => {
     const nextHeater = { ...heater, ...updates };
     setHeater(nextHeater);
-    localStorage.setItem('pool_heater', JSON.stringify(nextHeater));
     try {
-      await setDoc(doc(db, 'device_status', 'heater'), nextHeater);
+      await apiClient.updateDevice('heater', nextHeater);
     } catch (e) {
-      console.warn('Network queued heater update.');
+      console.warn('Could not save heater update.', e);
     }
   };
 
   const handleUpdateThermometer = async (updates: Partial<ThermometerStatus>) => {
     const nextTherm = { ...thermometer, ...updates };
     setThermometer(nextTherm);
-    localStorage.setItem('pool_thermometer', JSON.stringify(nextTherm));
     try {
-      await setDoc(doc(db, 'device_status', 'thermometer'), nextTherm);
+      await apiClient.updateDevice('thermometer', nextTherm);
     } catch (e) {
-      console.warn('Network queued thermometer update.');
+      console.warn('Could not save thermometer update.', e);
     }
   };
 
   const handleUpdateAlexaConnection = async (updates: Partial<AlexaConnection>) => {
     const nextConn = { ...alexaConnection, ...updates };
     setAlexaConnection(nextConn);
-    localStorage.setItem('pool_alexa_conn', JSON.stringify(nextConn));
     try {
-      await setDoc(doc(db, 'device_status', 'alexa_connection'), nextConn);
+      await apiClient.updateDevice('alexa_connection', nextConn);
     } catch (e) {
-      console.warn('Network queued Alexa connection update.');
+      console.warn('Could not save Alexa connection update.', e);
     }
   };
 
@@ -466,68 +316,29 @@ export default function App() {
       upcomingDue: new Date(Date.now() + taskObj.intervalDays * 24 * 3600 * 1000).toISOString(),
     };
 
-    const nextTasks = [newTask, ...tasks];
-    setTasks(nextTasks);
-    localStorage.setItem('pool_tasks', JSON.stringify(nextTasks));
-
+    setTasks((prev) => [newTask, ...prev]);
     try {
-      await setDoc(doc(db, 'maintenance__schedules', id), {
-        name: newTask.name,
-        description: newTask.description,
-        intervalDays: newTask.intervalDays,
-        lastDone: newTask.lastDone,
-        upcomingDue: newTask.upcomingDue,
-        category: newTask.category,
-      });
+      await apiClient.addTask(newTask);
     } catch (e) {
-      console.warn('Network log task queue.');
+      console.warn('Could not save new task.', e);
     }
   };
 
   const handleCompleteTask = async (taskId: string) => {
-    const nextTasks = tasks.map((t) => {
-      if (t.id === taskId) {
-        const last = new Date().toISOString();
-        const due = new Date(Date.now() + t.intervalDays * 24 * 3600 * 1000).toISOString();
-        return { ...t, lastDone: last, upcomingDue: due };
-      }
-      return t;
-    });
+    try {
+      const updated = await apiClient.completeTask(taskId);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
 
-    setTasks(nextTasks);
-    localStorage.setItem('pool_tasks', JSON.stringify(nextTasks));
-
-    const target = nextTasks.find((t) => t.id === taskId);
-    if (target) {
-      try {
-        await setDoc(doc(db, 'maintenance__schedules', taskId), {
-          name: target.name,
-          description: target.description,
-          intervalDays: target.intervalDays,
-          lastDone: target.lastDone,
-          upcomingDue: target.upcomingDue,
-          category: target.category,
-        });
-
-        // Add to notifications
-        const completeNotif: InAppNotification = {
-          id: Math.random().toString(),
-          timestamp: new Date().toISOString(),
-          title: `Duty Completed: ${target.name}`,
-          message: `Pool task is logged successfully. Next scheduled task check is in ${target.intervalDays} days.`,
-          type: 'success',
-          read: false,
-          category: 'maintenance',
-        };
-        setNotifications((prev) => {
-          const val = [completeNotif, ...prev];
-          localStorage.setItem('pool_notifs', JSON.stringify(val));
-          return val;
-        });
-        await addDoc(collection(db, 'notifications'), completeNotif);
-      } catch (e) {
-        console.warn('Network queued schedule completed update.');
-      }
+      const saved = await apiClient.addNotification({
+        title: `Duty Completed: ${updated.name}`,
+        message: `Pool task is logged successfully. Next scheduled task check is in ${updated.intervalDays} days.`,
+        type: 'success',
+        read: false,
+        category: 'maintenance',
+      });
+      setNotifications((prev) => [saved, ...prev]);
+    } catch (e) {
+      console.warn('Could not complete task.', e);
     }
   };
 
@@ -535,15 +346,11 @@ export default function App() {
     log: AlexaLog,
     triggerMutate: { device: string; property: string; value: any }
   ) => {
-    // Append log
-    const nextLogs = [log, ...alexaLogs];
-    setAlexaLogs(nextLogs);
-    localStorage.setItem('pool_alexa', JSON.stringify(nextLogs));
-
     try {
-      await addDoc(collection(db, 'alexa_history'), log);
+      const saved = await apiClient.addAlexaLog(log);
+      setAlexaLogs((prev) => [saved, ...prev]);
     } catch (e) {
-      console.warn('Queued voice interaction write.');
+      console.warn('Could not save voice interaction.', e);
     }
 
     // Trigger state changes
@@ -557,17 +364,21 @@ export default function App() {
   };
 
   const markNotificationRead = async (id: string) => {
-    const nextNotifs = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
-    setNotifications(nextNotifs);
-    localStorage.setItem('pool_notifs', JSON.stringify(nextNotifs));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     try {
-      await setDoc(doc(db, 'notifications', id), { read: true }, { merge: true });
-    } catch (e) {}
+      await apiClient.markNotificationRead(id);
+    } catch (e) {
+      console.warn('Could not mark notification read.', e);
+    }
   };
 
   const clearAllNotifications = async () => {
     setNotifications([]);
-    localStorage.setItem('pool_notifs', JSON.stringify([]));
+    try {
+      await apiClient.clearNotifications();
+    } catch (e) {
+      console.warn('Could not clear notifications.', e);
+    }
   };
 
   return (
@@ -586,13 +397,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Persistent alerts bell */}
+          {/* Persistent alerts bell + settings */}
           <div className="flex items-center gap-3">
             <NotificationCenter
               notifications={notifications}
               onMarkRead={markNotificationRead}
               onClearAll={clearAllNotifications}
             />
+            <SettingsPanel />
           </div>
         </div>
       </header>
@@ -693,8 +505,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
           <p>© 2026 Above-Ground Pool Buddy. Automatically maintaining crystal-clear blue vinyl pools safely.</p>
           <div className="flex gap-4">
-            <span>Linked Email: ioana@sundius.com</span>
-            <span>Cloud Ingress Port: 3000</span>
+            <span>Self-hosted · Local Postgres</span>
           </div>
         </div>
       </footer>
