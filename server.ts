@@ -2,26 +2,19 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { initDb, getSetting } from './db';
+import { api } from './api';
 
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
-// Lazy-loaded Gemini AI client to prevent crash if key is missing
-let aiClient: GoogleGenAI | null = null;
-function getAi(): GoogleGenAI {
-  if (!aiClient) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      console.warn("WARNING: GEMINI_API_KEY environment variable is not set. AI features will run with simulated responses.");
-    }
-    aiClient = new GoogleGenAI({ apiKey: key || "MOCK_KEY" });
-  }
-  return aiClient;
+// The Gemini API key is stored in the database (settings table), entered via
+// the app's Settings screen — not in source or a config file. Resolve it per
+// request so a freshly-saved key takes effect without a restart.
+async function resolveGeminiKey(): Promise<string | null> {
+  return (await getSetting('gemini_api_key')) || process.env.GEMINI_API_KEY || null;
 }
 
 // 1. Alexa Simulator & Chemistry AI Router
@@ -32,8 +25,9 @@ app.post('/api/alexa-command', async (req, res) => {
       return res.status(400).json({ error: 'Command prompt is required' });
     }
 
-    const keyAvailable = !!process.env.GEMINI_API_KEY;
-    
+    const geminiKey = await resolveGeminiKey();
+    const keyAvailable = !!geminiKey;
+
     // Fallback simulation inside server if API key is not present or if call fails
     const runMockSelector = (cmd: string) => {
       const lower = cmd.toLowerCase();
@@ -168,7 +162,7 @@ Respond strictly in JSON format. Provide the following keys:
 
 JSON response:`;
 
-    const ai = getAi();
+    const ai = new GoogleGenAI({ apiKey: geminiKey as string });
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -193,8 +187,14 @@ JSON response:`;
   }
 });
 
+// Mount the database-backed REST API
+app.use('/api', api);
+
 // Serve frontend assets
 async function init() {
+  // Ensure schema exists and defaults are seeded before serving traffic.
+  await initDb();
+
   if (process.env.NODE_ENV !== "production") {
     // Vite Dev Server Middleware
     const vite = await createViteServer({
