@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { initDb, getSetting } from './db';
 import { api } from './api';
+import { startHaPoller, stopHaPoller } from './ha-poller';
 
 const app = express();
 app.use(express.json());
@@ -211,8 +212,15 @@ async function init() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Pool Manager Server running at http://0.0.0.0:${PORT}`);
+  });
+
+  startHaPoller();
+
+  process.on('SIGTERM', () => {
+    stopHaPoller();
+    server.close();
   });
 }
 

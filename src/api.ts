@@ -30,4 +30,12 @@ export const apiClient = {
   getSettingStatus: (key: string) => req(`/settings/${key}`),
   saveSetting: (key: string, value: string) =>
     req(`/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+  // Home Assistant passthrough
+  haSetDevice: (entityId: string, on: boolean) =>
+    req(`/ha/device/${encodeURIComponent(entityId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ on }),
+    }),
+  haGetState: (entityId: string) =>
+    req(`/ha/state/${encodeURIComponent(entityId)}`),
 };

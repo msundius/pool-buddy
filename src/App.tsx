@@ -271,6 +271,17 @@ export default function App() {
     }
   };
 
+  // haEntity resolves the configured HA entity ID for a device from the DB
+  // settings. Returns null if not configured — the toggle still works locally.
+  async function haEntity(key: string): Promise<string | null> {
+    try {
+      const r = await apiClient.getSettingStatus(key);
+      return r?.isSet ? r.value : null;
+    } catch {
+      return null;
+    }
+  }
+
   const handleUpdatePump = async (updates: Partial<PumpStatus>) => {
     const nextPump = { ...pump, ...updates };
     setPump(nextPump);
@@ -278,6 +289,10 @@ export default function App() {
       await apiClient.updateDevice('pump', nextPump);
     } catch (e) {
       console.warn('Could not save pump change.', e);
+    }
+    if ('isCurrentlyOn' in updates) {
+      const entity = await haEntity('ha_entity_pump');
+      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
     }
   };
 
@@ -289,6 +304,10 @@ export default function App() {
     } catch (e) {
       console.warn('Could not save chlorinator update.', e);
     }
+    if ('isCurrentlyOn' in updates) {
+      const entity = await haEntity('ha_entity_chlorinator');
+      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
+    }
   };
 
   const handleUpdateHeater = async (updates: Partial<HeaterStatus>) => {
@@ -298,6 +317,10 @@ export default function App() {
       await apiClient.updateDevice('heater', nextHeater);
     } catch (e) {
       console.warn('Could not save heater update.', e);
+    }
+    if ('isCurrentlyOn' in updates) {
+      const entity = await haEntity('ha_entity_heater');
+      if (entity) apiClient.haSetDevice(entity, updates.isCurrentlyOn!).catch(() => {});
     }
   };
 
