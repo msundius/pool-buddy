@@ -42,3 +42,8 @@ App: http://localhost:3000
 
 See [TODO.md](TODO.md) for the planned roadmap (Home Assistant integration,
 Inkbird temperature, Alexa via Nabu Casa, etc.).
+
+## Contributing
+
+Contributions are welcome. Please open an issue or pull request to discuss
+changes before submitting larger work.
