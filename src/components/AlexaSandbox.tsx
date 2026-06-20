@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlexaLog, ChemicalReading, PumpStatus, ChlorinatorStatus, PoolVolumeConfig, HeaterStatus, ThermometerStatus } from '../types';
 import { Smartphone, Mic, Send, Speech, Terminal, Volume2, Sparkles, CheckCircle, Wifi, Activity } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface AlexaSandboxProps {
   thermometer: ThermometerStatus;
   logs: AlexaLog[];
   onAlexaCommandSuccess: (log: AlexaLog, triggerMutate: { device: string; property: string; value: any }) => void;
+  onRegisterTrigger: (fn: (cmd: string) => void) => void;
 }
 
 const PRESET_COMMANDS = [
@@ -30,14 +31,21 @@ export function AlexaSandbox({
   thermometer,
   logs,
   onAlexaCommandSuccess,
+  onRegisterTrigger,
 }: AlexaSandboxProps) {
   const [customCommand, setCustomCommand] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [alexaVoiceOutput, setAlexaVoiceOutput] = useState<string>('Alexa is linked. Try saying "Alexa, turn on the pool heater" to begin.');
   const [showLogs, setShowLogs] = useState(false);
 
+  // Expose handleSendCommand to App.tsx so AlexaConnectionManager can trigger
+  // commands without any DOM manipulation.
+  useEffect(() => {
+    onRegisterTrigger(handleSendCommand);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Send voice query to fullstack backend proxy /api/alexa-command
-  const handleSendCommand = async (cmdText: string) => {
+  async function handleSendCommand(cmdText: string) {
     if (!cmdText.trim() || isProcessing) return;
     setIsProcessing(true);
     setAlexaVoiceOutput('Linking smart home controller...');

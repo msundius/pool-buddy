@@ -16,10 +16,12 @@
 
 ## Remaining
 
-- [ ] **#4 — Notification dedup + pagination guard.** Backend caps the load at
-      30; still want smarter dedup of recurring chemistry alerts.
-- [ ] **#3 — Replace DOM-string Alexa trigger** between `AlexaConnectionManager`
-      and `AlexaSandbox` with proper React state.
+- [x] **#4 — Notification dedup + pagination guard.** Chemistry alert effect
+      now uses a ref snapshot for dedup (avoids stale closure + infinite loop).
+      In-memory list capped at 30.
+- [x] **#3 — Replace DOM-string Alexa trigger.** `AlexaConnectionManager` now
+      calls a callback registered by `AlexaSandbox` via a ref in `App.tsx`.
+      No more `getElementById` / synthetic DOM events.
 - [ ] **#6 — Home Assistant integration layer.** Rewire device handlers to call
       HA's REST API so buttons control real plugs. HA URL + token in `settings`.
 - [ ] **#7 — Poll real temp from HA (Inkbird via Tuya→HA) → write to Postgres.**
