@@ -9,7 +9,7 @@ import { startHaPoller, stopHaPoller } from './ha-poller';
 const app = express();
 app.use(express.json());
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 3030;
 
 // The Gemini API key is stored in the database (settings table), entered via
 // the app's Settings screen — not in source or a config file. Resolve it per

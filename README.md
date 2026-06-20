@@ -17,7 +17,7 @@ Brings up Postgres + the app together.
 docker compose up --build
 ```
 
-App: http://localhost:3000
+App: http://localhost:3030
 
 ## Run locally (without Docker)
 
