@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiClient } from './api';
 
 import {
@@ -142,6 +142,17 @@ export default function App() {
   const [tasks, setTasks] = useState<MaintenanceTask[]>(DEFAULT_TAKS);
   const [alexaLogs, setAlexaLogs] = useState<AlexaLog[]>([]);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
+  // Ref keeps the dedup check in the chemistry effect current without making
+  // notifications a dependency (which would cause an infinite loop).
+  const notificationsRef = useRef<InAppNotification[]>([]);
+  useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
+
+  // Shared callback so AlexaConnectionManager can trigger a command in
+  // AlexaSandbox without touching the DOM. App.tsx owns the bridge.
+  const alexaSandboxCommandRef = useRef<((cmd: string) => void) | null>(null);
+  const handleAlexaWebhookTrigger = useCallback((cmd: string) => {
+    alexaSandboxCommandRef.current?.(cmd);
+  }, []);
 
   // 1. Load all state from the backend (which owns the Postgres connection).
   useEffect(() => {
@@ -220,16 +231,19 @@ export default function App() {
       });
     }
 
-    // Persist any new alerts that aren't already present unread, using the
-    // backend-assigned id so read-state updates target the correct row.
+    // Use a ref snapshot for dedup so this effect doesn't re-run on every
+    // notification change (which would cause an infinite loop).
+    const MAX_NOTIFICATIONS = 30;
     if (generated.length > 0) {
       (async () => {
         for (const gen of generated) {
-          const exists = notifications.some((ex) => ex.title === gen.title && !ex.read);
+          const exists = notificationsRef.current.some(
+            (ex) => ex.title === gen.title && !ex.read
+          );
           if (exists) continue;
           try {
             const saved = await apiClient.addNotification(gen);
-            setNotifications((prev) => [saved, ...prev]);
+            setNotifications((prev) => [saved, ...prev].slice(0, MAX_NOTIFICATIONS));
           } catch (e) {
             console.warn('Could not save notification.', e);
           }
@@ -426,17 +440,7 @@ export default function App() {
               heater={heater}
               thermometer={thermometer}
               onUpdateConnection={handleUpdateAlexaConnection}
-              onAlexaWebhookTrigger={(cmd) => {
-                const searchBox = document.getElementById('input-alexa-manual-cmd') as HTMLInputElement;
-                if (searchBox) {
-                  searchBox.value = cmd;
-                  searchBox.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                const triggerBtn = document.getElementById('btn-send-custom-command') as HTMLButtonElement;
-                if (triggerBtn) {
-                  setTimeout(() => triggerBtn.click(), 100);
-                }
-              }}
+              onAlexaWebhookTrigger={handleAlexaWebhookTrigger}
             />
           </div>
         </div>
@@ -464,6 +468,7 @@ export default function App() {
               thermometer={thermometer}
               logs={alexaLogs}
               onAlexaCommandSuccess={handleAlexaCommandSuccess}
+              onRegisterTrigger={(fn) => { alexaSandboxCommandRef.current = fn; }}
             />
           </div>
 
