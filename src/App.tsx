@@ -24,6 +24,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { HeaterThermometerControls } from './components/HeaterThermometerControls';
 import { AlexaConnectionManager } from './components/AlexaConnectionManager';
 import { SettingsPanel } from './components/SettingsPanel';
+import { InstallButton } from './components/InstallButton';
 
 import { Waves } from 'lucide-react';
 
@@ -467,6 +468,7 @@ export default function App() {
 
           {/* Persistent alerts bell + settings */}
           <div className="flex items-center gap-3">
+            <InstallButton />
             <NotificationCenter
               notifications={notifications}
               onMarkRead={markNotificationRead}
