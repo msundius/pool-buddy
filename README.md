@@ -46,8 +46,10 @@ Compose, so each value is set in exactly one place.
   database. Without a key, commands fall back to a built-in regex parser.
 - **Home Assistant** — configure the base URL, a Long-Lived Access Token, and
   the equipment entity IDs (pump / chlorinator / heater) in the **Settings**
-  panel, then use **Test connection** to verify reachability. When the backend
-  runs in Docker, use HA's IP rather than a hostname the container can't resolve.
+  panel, then use **Test connection** to verify reachability. When HA runs on
+  the same host, use `http://host.docker.internal:8123` (the default) — the
+  Compose file maps that hostname to the Docker host. Otherwise use HA's IP or
+  any hostname the container can resolve.
 
 See [TODO.md](TODO.md) for the planned roadmap (Home Assistant integration,
 Inkbird temperature, Alexa via Nabu Casa, etc.).
